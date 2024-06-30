@@ -1,0 +1,151 @@
+%{
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <strings.h> // For strcasecmp
+%}
+
+%option noyywrap
+
+/* Definitions for keywords */
+ARRAY    "ARRAY"
+BEGIN    "BEGIN"
+BOOLEAN  "BOOLEAN"
+COMMENT  "COMMENT"
+CONTINUE "CONTINUE"
+DO       "DO"
+DOUBLE   "DOUBLE"
+ELSE     "ELSE"
+END      "END"
+FALSE    "FALSE"
+FOR      "FOR"
+IF       "IF"
+INTEGER  "INTEGER"
+LABEL    "LABEL"
+LIST     "LIST"
+LONG     "LONG"
+OWN      "OWN"
+PROCEDURE "PROCEDURE"
+STEP     "STEP"
+SWITCH   "SWITCH"
+THEN     "THEN"
+TRUE     "TRUE"
+UNTIL    "UNTIL"
+VALUE    "VALUE"
+WHILE    "WHILE"
+
+/* Definitions for operators */
+AND      "AND"
+OR       "OR"
+LEQ      "LEQ"
+LT       "LT"
+GEQ      "GEQ"
+GT       "GT"
+NOT      "NOT"
+EQL      "EQL"
+NEQ      "NEQ"
+ASSIGN   ":="
+PLUS     "\\+"
+ASTERISK "\\*"
+SLASH    "/"
+PERCENT  "%"
+CARET    "\\^"
+AMPERSAND "&"
+
+/* Token structure */
+%{
+#include <stdlib.h>
+
+struct Token {
+    char *type;
+    int count;
+    char *lexeme;
+};
+
+struct Token tokens[1000]; // Define tokens array
+int num_tokens = 0;        // Track number of tokens
+
+/* Function to add or update token in the tokens array */
+void add_token(char *type, char *lexeme) {
+    for (int i = 0; i < num_tokens; ++i) {
+        if (strcmp(tokens[i].lexeme, lexeme) == 0 && strcmp(tokens[i].type, type) == 0) {
+            tokens[i].count++;
+            return;
+        }
+    }
+    tokens[num_tokens].type = type;
+    tokens[num_tokens].count = 1;
+    tokens[num_tokens].lexeme = strdup(lexeme);
+    num_tokens++;
+}
+%}
+
+%%
+
+{BEGIN}      { add_token("KEYWORD", "BEGIN"); }
+{ELSE}       { add_token("KEYWORD", "ELSE"); }
+{END}        { add_token("KEYWORD", "END"); }
+{IF}         { add_token("KEYWORD", "IF"); }
+{INTEGER}    { add_token("KEYWORD", "INTEGER"); }
+{THEN}       { add_token("KEYWORD", "THEN"); }
+{GT}         { add_token("OPERATOR", "GT"); }
+"PRINT"      { add_token("IDENTIFIER", "PRINT"); }
+[0-9]+       { add_token("INTEGER", yytext); }
+":="         { add_token("OPERATOR", ":="); }
+\"[^"]*\"    {
+    char *lexeme = strdup(yytext + 1);
+    lexeme[strlen(lexeme) - 1] = '\0'; // Remove the double quotes
+    add_token("STRING", lexeme);
+    free(lexeme);
+}
+[a-zA-Z_][a-zA-Z0-9_]*  { add_token("IDENTIFIER", yytext); }
+[\{\}\[\]\(\);:,] {
+    char lexeme[2] = {yytext[0], '\0'};
+    add_token("DELIMITER", lexeme);
+}
+
+\n           { /* Ignore newline characters */ }
+.            { /* Ignore unrecognized characters */ }
+
+%%
+
+/* Function to compare tokens for sorting */
+int compare_tokens(const void *a, const void *b) {
+    const struct Token *tokenA = (const struct Token *)a;
+    const struct Token *tokenB = (const struct Token *)b;
+    int lexeme_comparison = strcasecmp(tokenA->lexeme, tokenB->lexeme);
+    if (lexeme_comparison == 0) {
+        return strcasecmp(tokenA->type, tokenB->type);
+    }
+    return lexeme_comparison;
+}
+
+int main(int argc, char** argv) {
+    if (argc != 2) {
+        fprintf(stderr, "Usage: %s <input_file>\n", argv[0]);
+        return 1;
+    }
+
+    FILE* fp = fopen(argv[1], "r");
+    if (!fp) {
+        perror("Error opening file");
+        return 1;
+    }
+
+    yyin = fp;
+    yylex();
+
+    fclose(fp);
+
+    // Sort tokens array by lexeme and type
+    qsort(tokens, num_tokens, sizeof(struct Token), compare_tokens);
+
+    // Print sorted tokens
+    printf("Token\tCount\tLexeme\n");
+    for (int i = 0; i < num_tokens; ++i) {
+        printf("%s\t%d\t%s\n", tokens[i].type, tokens[i].count, tokens[i].lexeme);
+        free(tokens[i].lexeme); // Free dynamically allocated lexeme memory
+    }
+
+    return 0;
+}
